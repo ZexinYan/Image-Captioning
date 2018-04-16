@@ -1,16 +1,18 @@
 import argparse
-import torch
-import torch.nn as nn
-from torch.optim.lr_scheduler import ReduceLROnPlateau
-from build_vocab import Vocabulary
 import os
 import pickle
-from data_loader import get_loader
-from model import EncoderCNN, DecoderRNN
+import time
+
+import torch
+import torch.nn as nn
 from torch.autograd import Variable
 from torch.nn.utils.rnn import pack_padded_sequence
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torchvision import transforms
-import time
+
+from utils.data_loader import get_loader
+from utils.model import EncoderCNN, DecoderRNN
+from utils.logger import Logger
 
 
 class CaptionGenerator(object):
@@ -27,6 +29,7 @@ class CaptionGenerator(object):
         self.criterion = self.__init_criterion()
         self.optimizer = self.__init_optimizer()
         self.scheduler = self.__init_scheduler()
+        self.logger = self.__init_logger()
 
     def train(self):
         # Train the Models
@@ -35,7 +38,8 @@ class CaptionGenerator(object):
             val_loss = self.__epoch_val()
             self.scheduler.step(val_loss)
             print("[{}] Epoch-{} train loss:{} - val loss:{}".format(self.__get_now(), epoch, train_loss, val_loss))
-            self.__save_model(val_loss, "train_best")
+            self.__save_model(val_loss, self.args.saved_model_name)
+            self.__log(train_loss, val_loss, epoch)
 
     def __epoch_train(self):
         train_loss = 0
@@ -70,6 +74,29 @@ class CaptionGenerator(object):
             loss = self.criterion(outputs, targets)
             val_loss += loss.data[0]
         return val_loss
+
+    def __log(self, train_loss, val_loss, epoch):
+        info = {
+            'train loss': train_loss,
+            'val loss': val_loss
+        }
+
+        for tag, value in info.items():
+            self.logger.scalar_summary(tag, value, epoch + 1)
+
+        # (2) Log values and gradients of the parameters (histogram)
+        # for tag, value in net.named_parameters():
+        #     tag = tag.replace('.', '/')
+        #     logger.histo_summary(tag, to_np(value), step+1)
+        #     logger.histo_summary(tag+'/grad', to_np(value.grad), step+1)
+        #
+        # # (3) Log the images
+        # info = {
+        #     'images': to_np(images.view(-1, 28, 28)[:10])
+        # }
+        #
+        # for tag, images in info.items():
+        #     logger.image_summary(tag, images, step+1)
 
     def __init_model_path(self):
         if not os.path.exists(self.args.model_path):
@@ -146,7 +173,11 @@ class CaptionGenerator(object):
         return str(time.strftime('%Y%m%d', time.gmtime()))
 
     def __get_now(self):
-        return str(time.strftime('%m%d %H:%M:%S', time.gmtime()))
+        return str(time.strftime('%m%d-%H:%M:%S', time.gmtime()))
+
+    def __init_logger(self):
+        logger = Logger(os.path.join(self.args.log_dir, self.__get_now()))
+        return logger
 
 
 if __name__ == '__main__':
@@ -169,7 +200,9 @@ if __name__ == '__main__':
                         help='path for train files')
     parser.add_argument('--val_images_json', type=str, default='./data/val_files.json',
                         help='path for val files')
-    parser.add_argument('--saved_model_name', type=str, default='./')
+    parser.add_argument('--log_dir', type=str, default='./logs',
+                        help='The path for tensorboard.')
+    parser.add_argument('--saved_model_name', type=str, default='')
 
     # Model parameters
     parser.add_argument('--embed_size', type=int, default=256,
@@ -180,8 +213,8 @@ if __name__ == '__main__':
                         help='number of layers in lstm')
 
     parser.add_argument('--num_epochs', type=int, default=100)
-    parser.add_argument('--batch_size', type=int, default=128)
-    parser.add_argument('--num_workers', type=int, default=256)
+    parser.add_argument('--batch_size', type=int, default=256)
+    parser.add_argument('--num_workers', type=int, default=128)
     parser.add_argument('--learning_rate', type=float, default=0.001)
     args = parser.parse_args()
     args.cuda = not args.no_cuda and torch.cuda.is_available()

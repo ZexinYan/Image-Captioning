@@ -1,14 +1,15 @@
-import torch
 import argparse
-import pickle
+import json
 import os
+import pickle
+
+import torch
 from torch.autograd import Variable
 from torchvision import transforms
-from build_vocab import Vocabulary
-from data_loader import get_loader
-from model import EncoderCNN, DecoderRNN
 from tqdm import tqdm
-import json
+
+from utils.data_loader import get_loader
+from utils.model import EncoderCNN, DecoderRNN
 
 
 class Sampler(object):
