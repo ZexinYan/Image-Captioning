@@ -1,5 +1,6 @@
 from pycocoevalcap.eval import calculate_metrics
 import numpy as np
+import json
 
 
 def create_dataset(array):
@@ -13,11 +14,25 @@ def create_dataset(array):
     return dataset
 
 
-if __name__ == '__main__':
-    y_pred = np.load('./results/{}'.format('y_pred_val.npz'))['arr_0']
-    y_true = np.load('./results/{}'.format('y_true_val.npz'))['arr_0']
+def load_json(json_file):
+    with open(json_file, 'r') as f:
+        data = json.load(f)
+    return data
 
-    rng = range(len(y_true))
-    datasetGTS = create_dataset(y_pred)
-    datasetRES = create_dataset(y_true)
+if __name__ == '__main__':
+    train = load_json('./results/val.json')
+    datasetGTS = {'annotations': []}
+    datasetRES = {'annotations': []}
+
+    for i, image_id in enumerate(train):
+        datasetGTS['annotations'].append({
+            'image_id': i,
+            'caption': train[image_id]['GT']
+        })
+        datasetRES['annotations'].append({
+            'image_id': i,
+            'caption': train[image_id]['Pred']
+        })
+
+    rng = range(len(train))
     print calculate_metrics(rng, datasetGTS, datasetRES)

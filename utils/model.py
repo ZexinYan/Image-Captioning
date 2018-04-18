@@ -64,11 +64,11 @@ class DecoderRNN(nn.Module):
 
 
 if __name__ == '__main__':
-    # encoder = EncoderCNN(512, pretrained=False)
-    # print(encoder)
-    #
-    # decoder = DecoderRNN(512, 512, 100, 10)
-    # print(decoder)
-    a = np.zeros((10, 3))
-    for each in a:
-        print(each)
+    # encoder = EncoderCNN(embed_size=256, pretrained=False)
+    decoder = DecoderRNN(embed_size=256, hidden_size=512, vocab_size=1800, num_layers=1)
+    image = Variable(torch.randn(3, 3, 224, 224))
+    # feature = encoder.forward(image)
+    feature = Variable(torch.randn(3, 256))
+    caption = Variable(torch.ones(3, 20)).long()
+    length = np.array([3, 2, 1])
+    print(decoder.forward(feature, caption, length))

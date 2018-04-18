@@ -12,6 +12,7 @@ from torchvision import transforms
 
 from utils.data_loader import get_loader
 from utils.model import EncoderCNN, DecoderRNN
+from utils.build_vocab import Vocabulary
 from utils.logger import Logger
 
 
@@ -202,7 +203,7 @@ if __name__ == '__main__':
                         help='path for val files')
     parser.add_argument('--log_dir', type=str, default='./logs',
                         help='The path for tensorboard.')
-    parser.add_argument('--saved_model_name', type=str, default='')
+    parser.add_argument('--saved_model_name', type=str, default='val')
 
     # Model parameters
     parser.add_argument('--embed_size', type=int, default=256,
@@ -214,7 +215,7 @@ if __name__ == '__main__':
 
     parser.add_argument('--num_epochs', type=int, default=100)
     parser.add_argument('--batch_size', type=int, default=256)
-    parser.add_argument('--num_workers', type=int, default=128)
+    parser.add_argument('--num_workers', type=int, default=1)
     parser.add_argument('--learning_rate', type=float, default=0.001)
     args = parser.parse_args()
     args.cuda = not args.no_cuda and torch.cuda.is_available()
