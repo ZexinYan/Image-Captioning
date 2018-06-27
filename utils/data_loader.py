@@ -5,10 +5,12 @@ import torch.utils.data as data
 from PIL import Image
 
 from utils.build_vocab import Vocabulary, JsonReader
+from torchvision import transforms
+import pickle
 
 
 class COCODataSet(data.Dataset):
-    def __init__(self, image_dir: str, caption_json: str, images_json: str, vocabulary: Vocabulary, transform=None):
+    def __init__(self, image_dir, caption_json, images_json, vocabulary, transform=None):
         """
         :param image_dir: Image Directory
         :param caption_json: caption Json file path
@@ -24,7 +26,10 @@ class COCODataSet(data.Dataset):
 
     def __getitem__(self, index):
         image_id = self.images[index]
-        caption = self.caption[image_id]
+        try:
+            caption = self.caption[image_id]
+        except:
+            caption = ["<pad>"]
 
         image = Image.open(os.path.join(self.image_dir, image_id)).convert('RGB')
         if self.transform is not None:
@@ -83,3 +88,38 @@ def get_loader(image_dir, caption_json, images_json, vocabulary, transform, batc
                                               num_workers=num_workers,
                                               collate_fn=collate_fn)
     return data_loader
+
+
+if __name__ == '__main__':
+    image_dir = '../medical_data/images'
+    caption_json = '../medical_data/captions.json'
+    image_json = '../medical_data/train_files.json'
+    vocabulary = '../medical_data/vocab.pkl'
+
+    with open(vocabulary, 'rb') as f:
+        vocab = pickle.load(f)
+
+    resize = 256
+    crop_size = 224
+
+    transform = transforms.Compose([
+        transforms.Resize(resize),
+        transforms.RandomCrop(crop_size),
+        transforms.RandomHorizontalFlip(),
+        transforms.ToTensor(),
+        transforms.Normalize((0.485, 0.456, 0.406),
+                             (0.229, 0.224, 0.225))])
+
+    data_loader = get_loader(image_dir=image_dir,
+                             caption_json=caption_json,
+                             images_json=image_json,
+                             vocabulary=vocab,
+                             transform=transform,
+                             batch_size=8,
+                             shuffle=False,
+                             num_workers=1)
+    for image, target, _, lenghts in data_loader:
+        print(image.shape)
+        print(target.shape)
+        print(lenghts)
+        break

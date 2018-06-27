@@ -5,6 +5,8 @@ from torch.autograd import Variable
 from torch.nn.utils.rnn import pack_padded_sequence
 import numpy as np
 
+from utils.tcn import *
+
 
 class EncoderCNN(nn.Module):
     def __init__(self, embed_size, pretrained=True):
@@ -51,9 +53,9 @@ class DecoderRNN(nn.Module):
         return outputs
 
     def sample(self, features, states=None):
-        sampled_ids = np.zeros((np.shape(features)[0], 20))
+        sampled_ids = np.zeros((np.shape(features)[0], 120))
         inputs = features.unsqueeze(1)
-        for i in range(20):
+        for i in range(120):
             hiddens, states = self.lstm(inputs, states)
             outputs = self.linear(hiddens.squeeze(1))
             predicted = torch.max(outputs, 1)[1]
