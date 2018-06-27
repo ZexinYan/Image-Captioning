@@ -19,7 +19,8 @@ from utils.logger import Logger
 class CaptionGenerator(object):
     def __init__(self, _args):
         self.args = _args
-        self.min_loss = 100000
+        self.min_val_loss = 100000
+        self.min_train_loss = 100000
         self.__init_model_path()
         self.transform = self.__init_transform()
         self.vocab = self.__init_vocab()
@@ -34,22 +35,21 @@ class CaptionGenerator(object):
 
     def train(self):
         # Train the Models
-        for epoch in range(args.num_epochs):
+        for epoch in range(self.args.num_epochs):
             train_loss = self.__epoch_train()
             val_loss = self.__epoch_val()
             self.scheduler.step(val_loss)
             print("[{}] Epoch-{} train loss:{} - val loss:{}".format(self.__get_now(), epoch, train_loss, val_loss))
-            self.__save_model(val_loss, self.args.saved_model_name)
+            self.__save_model(val_loss, train_loss)
             self.__log(train_loss, val_loss, epoch)
 
     def __epoch_train(self):
         train_loss = 0
-        for i, (images, captions, _, lengths) in enumerate(self.train_data_loader):
+        for images, captions, _, lengths in self.train_data_loader:
             self.encoder.train()
             images = self.__to_var(images, volatile=True)
             captions = self.__to_var(captions)
             targets = pack_padded_sequence(captions, lengths, batch_first=True)[0]
-
             # Forward, Backward and Optimize
             self.decoder.zero_grad()
             self.encoder.zero_grad()
@@ -68,7 +68,6 @@ class CaptionGenerator(object):
             images = self.__to_var(images, volatile=True)
             captions = self.__to_var(captions)
             targets = pack_padded_sequence(captions, lengths, batch_first=True)[0]
-
             # Forward, Backward and Optimize
             features = self.encoder(images)
             outputs = self.decoder(features, captions, lengths)
@@ -84,20 +83,6 @@ class CaptionGenerator(object):
 
         for tag, value in info.items():
             self.logger.scalar_summary(tag, value, epoch + 1)
-
-        # (2) Log values and gradients of the parameters (histogram)
-        # for tag, value in net.named_parameters():
-        #     tag = tag.replace('.', '/')
-        #     logger.histo_summary(tag, to_np(value), step+1)
-        #     logger.histo_summary(tag+'/grad', to_np(value.grad), step+1)
-        #
-        # # (3) Log the images
-        # info = {
-        #     'images': to_np(images.view(-1, 28, 28)[:10])
-        # }
-        #
-        # for tag, images in info.items():
-        #     logger.image_summary(tag, images, step+1)
 
     def __init_model_path(self):
         if not os.path.exists(self.args.model_path):
@@ -155,15 +140,26 @@ class CaptionGenerator(object):
         scheduler = ReduceLROnPlateau(self.optimizer, 'min', patience=10)
         return scheduler
 
-    def __save_model(self, loss, file_name):
-        if loss < self.min_loss:
-            print("Saved Model in {}".format(file_name))
+    def __save_model(self, val_loss, train_loss):
+        if val_loss < self.min_val_loss:
+            filename = os.path.join(self.args.model_path, "val_best.tar")
+            print("Saved Model in {} for validation".format(filename))
             torch.save({'encoder': self.encoder.state_dict(),
                         'decoder': self.decoder.state_dict(),
-                        'best_loss': loss,
+                        'best_loss': val_loss,
                         'optimizer': self.optimizer.state_dict()},
-                       file_name)
-            self.min_loss = loss
+                       filename)
+            self.min_val_loss = val_loss
+
+        if train_loss < self.min_train_loss:
+            filename = os.path.join(self.args.model_path, "train_best.tar")
+            print("Saved Model in {} for training".format(filename))
+            torch.save({'encoder': self.encoder.state_dict(),
+                        'decoder': self.decoder.state_dict(),
+                        'best_loss': val_loss,
+                        'optimizer': self.optimizer.state_dict()},
+                       filename)
+            self.min_train_loss = train_loss
 
     def __to_var(self, x, volatile=False):
         if self.args.cuda:
@@ -185,36 +181,35 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--no-cuda', action='store_true', default=False,
                         help='disables CUDA training')
-    parser.add_argument('--model_path', type=str, default='./models/',
+    parser.add_argument('--model_path', type=str, default='./report_models/val_based',
                         help='path for saving trained models')
     parser.add_argument('--resize', type=int, default=256,
                         help='size for resize image')
     parser.add_argument('--crop_size', type=int, default=224,
                         help='size for randomly cropping images')
-    parser.add_argument('--vocab_path', type=str, default='./data/vocab.pkl',
+    parser.add_argument('--vocab_path', type=str, default='./medical_data/vocab.pkl',
                         help='path for vocabulary wrapper')
-    parser.add_argument('--image_dir', type=str, default='./data/images',
+    parser.add_argument('--image_dir', type=str, default='./medical_data/images',
                         help='directory for images')
-    parser.add_argument('--caption_json', type=str, default='./data/captions.json',
+    parser.add_argument('--caption_json', type=str, default='./medical_data/captions.json',
                         help='path for captions')
-    parser.add_argument('--train_images_json', type=str, default='./data/train_files.json',
+    parser.add_argument('--train_images_json', type=str, default='./medical_data/train_files.json',
                         help='path for train files')
-    parser.add_argument('--val_images_json', type=str, default='./data/val_files.json',
+    parser.add_argument('--val_images_json', type=str, default='./medical_data/val_files.json',
                         help='path for val files')
     parser.add_argument('--log_dir', type=str, default='./logs',
                         help='The path for tensorboard.')
-    parser.add_argument('--saved_model_name', type=str, default='val')
 
     # Model parameters
-    parser.add_argument('--embed_size', type=int, default=256,
+    parser.add_argument('--embed_size', type=int, default=512,
                         help='dimension of word embedding vectors')
     parser.add_argument('--hidden_size', type=int, default=512,
                         help='dimension of lstm hidden states')
     parser.add_argument('--num_layers', type=int, default=1,
                         help='number of layers in lstm')
 
-    parser.add_argument('--num_epochs', type=int, default=100)
-    parser.add_argument('--batch_size', type=int, default=256)
+    parser.add_argument('--num_epochs', type=int, default=200)
+    parser.add_argument('--batch_size', type=int, default=32)
     parser.add_argument('--num_workers', type=int, default=1)
     parser.add_argument('--learning_rate', type=float, default=0.001)
     args = parser.parse_args()

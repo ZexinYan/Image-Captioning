@@ -10,6 +10,7 @@ from tqdm import tqdm
 
 from utils.data_loader import get_loader
 from utils.model import EncoderCNN, DecoderRNN
+from utils.build_vocab import Vocabulary
 
 
 class Sampler(object):
@@ -31,10 +32,10 @@ class Sampler(object):
             feature = self.encoder(images)
             sampled_ids = self.decoder.sample(feature)
 
-            # Decode word_ids to words
+            # # Decode word_ids to words
             for pred, reference, id in zip(sampled_ids, captions, images_id):
                 results[id] = {
-                    'GT': self.__vec2sent(reference),
+                    'GT': self.__vec2sent(reference.cpu().detach().numpy()),
                     'Pred': self.__vec2sent(pred)
                 }
         self.__save_json(results)
@@ -43,7 +44,7 @@ class Sampler(object):
     def __vec2sent(self, array):
         sampled_caption = []
         for word_id in array:
-            word = self.vocab.idx2word[word_id]
+            word = self.vocab.get_word_by_id(word_id)
             if word == '<start>':
                 continue
             if word == '<end>':
@@ -71,6 +72,7 @@ class Sampler(object):
     def __init_vocab(self):
         with open(self.args.vocab_path, 'rb') as f:
             vocab = pickle.load(f)
+        print(len(vocab))
         return vocab
 
     def __init_encoder(self):
@@ -106,39 +108,38 @@ class Sampler(object):
         with open(os.path.join(self.args.result_path, '{}.json'.format(self.args.result_name)), 'w') as f:
             json.dump(result, f)
 
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--image_dir', type=str, default='./data/images',
+    parser.add_argument('--image_dir', type=str, default='./medical_data/images',
                         help='the path of image for generating caption')
     parser.add_argument('--no-cuda', action='store_true', default=False,
                         help='disables CUDA training')
-    parser.add_argument('--caption_json', type=str, default='./data/captions.json',
+    parser.add_argument('--caption_json', type=str, default='./medical_data/captions.json',
                         help='path for captions')
-    parser.add_argument('--model_path', type=str, default='./models/train.pkl',
+    parser.add_argument('--model_path', type=str, default='./report_models/val_based/val_best.tar',
                         help='path for trained model')
-    parser.add_argument('--vocab_path', type=str, default='./data/vocab.pkl',
+    parser.add_argument('--vocab_path', type=str, default='./medical_data/vocab.pkl',
                         help='path for vocabulary wrapper')
-    parser.add_argument('--caption_dir', type=str, default='./data/captions.json',
-                        help='path for captions')
-    parser.add_argument('--images_json', type=str, default='./data/train_files.json',
+    parser.add_argument('--images_json', type=str, default='./medical_data/test_files.json',
                         help='path for train files')
     parser.add_argument('--resize', type=int, default=224,
                         help='size for resize image')
-    parser.add_argument('--result_path', type=str, default='./results',
+    parser.add_argument('--result_path', type=str, default='./report_models/val_based/COCO_results',
                         help='path for trained model')
-    parser.add_argument('--result_name', type=str, default='train',
+    parser.add_argument('--result_name', type=str, default='val_best_test',
                         help='the filename of the saved result.')
 
     # Model parameters (should be same as paramters in train.py)
-    parser.add_argument('--embed_size', type=int, default=256,
+    parser.add_argument('--embed_size', type=int, default=512,
                         help='dimension of word embedding vectors')
     parser.add_argument('--hidden_size', type=int, default=512,
                         help='dimension of lstm hidden states')
     parser.add_argument('--num_layers', type=int, default=1,
                         help='number of layers in lstm')
 
-    parser.add_argument('--batch_size', type=int, default=256)
-    parser.add_argument('--num_workers', type=int, default=8)
+    parser.add_argument('--batch_size', type=int, default=32)
+    parser.add_argument('--num_workers', type=int, default=1)
 
     args = parser.parse_args()
     args.cuda = not args.no_cuda and torch.cuda.is_available()
@@ -147,3 +148,5 @@ if __name__ == '__main__':
 
     sampler = Sampler(args)
     sampler.sample()
+
+# /home/huangyinya/stary/report_models/val_based/COCO_results

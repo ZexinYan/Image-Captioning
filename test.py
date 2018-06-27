@@ -20,7 +20,7 @@ def load_json(json_file):
     return data
 
 if __name__ == '__main__':
-    train = load_json('./results/val.json')
+    train = load_json('./report_models/val_based/COCO_results/val_best_test.json')
     datasetGTS = {'annotations': []}
     datasetRES = {'annotations': []}
 
